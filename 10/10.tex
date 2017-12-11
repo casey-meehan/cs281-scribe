@@ -184,5 +184,126 @@ Schnieder discussed studies that he and others carried out to explore joint atte
 
 Schnieder emphasized that he is open to ideas, and that he highly encourages anyone interested in working with this data in some way or form to email him at bertrand\_schneider@gse.harvard.edu.
 
+\subsection{Practice Problem: EM for a GMM HMM}
+Consider a HMM model where the observations are described by a mixture of Gaussians: 
+
+%p(\textbf{x_t} | y_t = j, \textbf{\theta}) = \sum_k(w_{jk} \N(\textbf{x}_t | \mu_{jk}, \Sigma_{jk}))
+$$p(\pmb{x}_t | z_t = z_j, \pmb{\theta}) = \sum_k w_{jk} \N (\pmb{x}_t | \pmb{\mu}_{jk}, \Sigma_{jk})$$
+Where $w_{jk}$ is the $k^{th}$ mixing weight at time $t$ in an unobserved state $z_t = j$. So, each of the $J$ possible $z$ states describe an observation with a unique GMM of $K$ gaussians/mixing weights. If the latent states are unobservable, using direct MLE or MAP to infer parameters is intractable, and EM becomes an attractive solution.  
+
+\begin{enumerate}
+\item Draw the graphical model
+\item Write the $E$ step 
+\item Write the $M$ step	
+\end{enumerate}
+
+{\Large Solutions}
+
+\begin{enumerate}
+	\item Graphical Model: \\
+	\includegraphics[width=7cm]{hand_GMM_HMM} \\
+	This model contains two layers of latent variables: the time states, $\pmb{z}$, and the Gaussian mixing weight associated with each state, $\pmb{w}$. Both contribute to the likelihood of the observations, $\pmb{x}$
+	
+	As you might have guessed, the key to this problem is a combination of EM for GMMs as described in Murphy 11.4, and EM for HMMs as described in Murphy 17.5
+	
+	Describe this HMM using the following notation:  
+	
+	Transition Matrix, $A$: 
+	$$
+	A_{i,j} = p(z_t = j | z_{t-1} = i) 
+	$$
+	Observation Probability, $b$: 
+	$$
+	b_{z_t} = p(\pmb{x}_t| z_t = j, \pmb{\theta}) = \sum_k w_{jk} \N (\pmb{x}_t | \mu_{jk}, \Sigma_{jk}) 
+	$$
+	Initial Probability, $\pi_y$:
+	$$
+	\pi_y = p(z_1 = y)
+	$$ 
+	
+	
+	\item Expectation Step: \\
+	The complete data log likelihood for this model can be represented as: 
+	$$
+	l_c(\pmb{\theta}) = \sum_{i=1}^{N} \log p(\pmb{x}_i, \pmb{z}_i | \pmb{\theta})
+	$$
+	Where $N$ is the number of samples of $\pmb{x}$ of length $T$ (e.g. $N$ samples of $T$ windows in audio processing) 
+	Without observing $\pmb{w}$ or $\pmb{z}$, maximizing the likelihood directly is intractable. Instead, we maximize the expected complete data log likelihood:
+	$$
+	Q(\pmb{\theta}, \pmb{\theta}^{t-1}) = \E_{\pmb{z}} \big[ l_c(\pmb{\theta}) | D, \pmb{\theta}^{t-1} \big] =\sum_{\pmb{z}} l_c(\pmb{\theta}) p(\pmb{z} | D,\pmb{\theta}^{t-1}) 
+	$$ 
+	Without loss of generality, consider only maximizing $Q$ for one of the $N$ time-sequences, $Q_i$, a chain of $T$ nodes. 
+	$$
+	Q_i(\pmb{\theta}, \pmb{\theta}^{t-1}) = \sum_{\pmb{z}_i} \log \Big( p(\pmb{x}_i, \pmb{z}_i | \pmb{\theta}) \Big) p(\pmb{z}_i |\pmb{x}_i,  \pmb{\theta}^{t-1})
+	$$
+	Where, 
+	
+	$$
+	p(\pmb{x}_i, \pmb{z}_i | \pmb{\theta}) = \pi_y b_{z_1} \prod_{t=2}^{T} A_{z_{t-1}, z_t} b_{z_t}
+	$$
+	Separating out terms, $Q_i$ becomes: 
+	\begin{align*}
+		Q_i(\pmb{\theta}, \pmb{\theta}^{t-1}) = 
+		&\sum_{\pmb{z}_i}\log \big(\pi_y \big) p(\pmb{z}_i | \pmb{x}_i, \pmb{\theta}^{t-1}) + \\
+		&\sum_{\pmb{z}_i}\bigg(\sum_{t=2}^{T}\log(A_{z_{t-1}, z_t}) \bigg) p(\pmb{z}_i | \pmb{x}_i, \pmb{\theta}^{t-1}) + \\
+		&\sum_{\pmb{z}_i}\bigg(\sum_{t=1}^{T} \log b_{z_t}\bigg) p(\pmb{z}_i | \pmb{x}_i, \pmb{\theta}^{t-1})
+	\end{align*}
+	
+	\item Maximization Step (see Murphy 17.5): \\
+	The strategy of optimizing the parameters of the first two terms the same as it is for any Markov chain: 
+	Simplifying the above summation, the first term becomes: 
+	$$
+	\sum_{y \in Z} \log(\pi_{y}) p(z_1 = y |\pmb{x_i},  \pmb{\theta}^{t-1}) 
+	$$
+	This can be optimized across $N$ samples by choosing
+	$$
+	\pi_y = %\frac{p(\pmb{x}, z_1=y | \pmb{\theta}^{t-1})}{p(\pmb{x}|\pmb{\theta}^{t-1})}%
+	 \frac{1}{N}\sum_{i=0}^{N-1} p(z_{i1} = y| \pmb{x_i},\pmb{\theta}^{t-1}) 
+	$$
+	
+	The second term becomes: 
+	
+	$$
+	\sum_{j\in Z} \sum_{s \in Z}  \sum_{t=2}^{T} \log(A_{ij}) p(z_{i, t-1} = j, z_{i, t} = s | \pmb{x_i},  \pmb{\theta}^{t-1}) 
+	$$
+	
+	This can be maximized across $N$ samples by choosing
+	$$
+	A_{ij} = \frac{\sum_{i=0}^{N-1} \sum_{t=2}^{T} p(z_{i, t-1} = i, z_{i, t} = j | \pmb{x_i},  \pmb{\theta}^{t-1})}
+	{\sum_{i=0}^{N-1} \sum_{t=2}^{T} p(z_{i, t-1} = i | \pmb{x_i},  \pmb{\theta}^{t-1})}
+	$$
+	The final term becomes: 
+	$$
+	\sum_{j=1}^{|Z|} \sum_{k=1}^{|W|} \sum_{t=1}^{T} \log \big( w_{jk} \N (\pmb{x}_{i,t} | \mu_{jk}, \Sigma_{jk}) \big) p(z_t = j | \pmb{x}_i, \pmb{\theta}^{t-1}))
+	$$
+	Using Murphy's notation for EM with GMM's (11.4), the responsibility of a given cluster $k$ for a given data point $i$, $r_{ik}$ is the posterior probability of $\pmb{x}_i$ belonging to cluster $k$: 
+	$$
+	r_{ik} = p(w_i = w_k | \pmb{x}_{i}, \pmb{\theta}^{t-1})
+	$$
+	In this model, the responsibility must incorporate the joint probability of a cluster weight, $w_{jk,t}$ \textit{and} the latent $z_{t}$
+	$$
+	r_{jk, t} = p(z_t = z_{j}, w_t = w_{jk} | \pmb{x}_i, \pmb{\theta}^{t-1})
+	$$
+	
+	The rest of the optimization procedure is analogous to Murphy's description of EM in GMM's (11.4)
+	
+	Let $L = |Z| \times |W|$. The $L$ mixing weights can be optimized across $N$ samples by choosing
+	$$
+	w_{jk} = \frac{\sum_{i=1}^{N-1} \sum_{t=1}^{T} r_{ijk, t} }{\sum_{i=1}^{N-1} \sum_{t=1}^{T} \sum_{k=1}^{|W|} r_{ijk, t}}
+	$$
+	
+	The $L$ MVN means can be optimized across $N$ samples by choosing:
+	$$ 
+	\pmb{\mu}_{jk} = \frac{\sum_{i=1}^{N-1} \sum_{t=1}^{T} r_{ijk, t} \pmb{x}_{i,t}}{\sum_{i=1}^{N-1} \sum_{t=1}^{T} r_{ijk, t} }
+	$$
+	The $L$ MVN covariance matrices can be optimized across $N$ samples by choosing: 
+	$$
+	\Sigma_{jk} = \frac{\sum_{i=1}^{N-1} \sum_{t=1}^{T} r_{ijk, t} (\pmb{x}_{i,t} - \pmb{\mu}_{jk})(\pmb{x}_{i,t} - \pmb{\mu}_{jk})^T}{\sum_{i=1}^{N-1} \sum_{t=1}^{T} r_{ijk, t}}
+	$$
+	
+\end{enumerate}
+
+
+
 \end{document}
 
